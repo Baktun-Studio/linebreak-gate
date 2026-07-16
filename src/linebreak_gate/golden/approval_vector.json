@@ -1,0 +1,31 @@
+{
+  "_comment": "LIN-51 Ed25519 approval conformance vector. Deterministic. Do not edit by hand; regenerate via scripts if the serialization intentionally changes.",
+  "canonical_payload_b64": "eyJhcHByb3ZlZF9hdCI6IjIwMjYtMDctMTVUMTI6MDA6MDBaIiwiYXBwcm92ZXJfZW1haWwiOiJhcmNoaXRlY3RAZXhhbXBsZS5jb20iLCJhcHByb3Zlcl9yb2xlIjoiYXJjaGl0ZWN0IiwiYXJ0aWZhY3RfaGFzaCI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJidW5kbGVfdmVyc2lvbiI6MSwiaW5zdGFuY2VfaWQiOiJpbnN0X2NvbmZvcm1hbmNlIiwicGhhc2UiOiJwcmQiLCJwcm9qZWN0X2lkIjoicHJval9kZW1vIn0=",
+  "canonical_payload_utf8": "{\"approved_at\":\"2026-07-15T12:00:00Z\",\"approver_email\":\"architect@example.com\",\"approver_role\":\"architect\",\"artifact_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"bundle_version\":1,\"instance_id\":\"inst_conformance\",\"phase\":\"prd\",\"project_id\":\"proj_demo\"}",
+  "envelope": {
+    "approved_at": "2026-07-15T12:00:00Z",
+    "approver_email": "architect@example.com",
+    "approver_role": "architect",
+    "artifact_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bundle_version": 1,
+    "instance_id": "inst_conformance",
+    "kid": "Vkdap1RjR0wChd9d",
+    "phase": "prd",
+    "project_id": "proj_demo",
+    "signature": "Cr3ZeaWmfPDdwtQotUC2zuCgPUEvtM4q16uGae4SWs9EIEpld9qVsY9Y0a5d3PeomXr53yRUuPKWKXUXyjpDBQ=="
+  },
+  "fields": {
+    "approved_at": "2026-07-15T12:00:00Z",
+    "approver_email": "architect@example.com",
+    "approver_role": "architect",
+    "artifact_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bundle_version": 1,
+    "instance_id": "inst_conformance",
+    "phase": "prd",
+    "project_id": "proj_demo"
+  },
+  "kid": "Vkdap1RjR0wChd9d",
+  "public_key_b64": "A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg=",
+  "seed_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "signature_b64": "Cr3ZeaWmfPDdwtQotUC2zuCgPUEvtM4q16uGae4SWs9EIEpld9qVsY9Y0a5d3PeomXr53yRUuPKWKXUXyjpDBQ=="
+}
