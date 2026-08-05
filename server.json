@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.baktun-studio/linebreak-gate",
+  "title": "LineBreak Gate & Spec Bridge",
+  "description": "Serves your approved acceptance criteria over MCP into Claude Code, Cursor, or Codex. Six tools: list/get/next story, story status, per-story check with the same engine CI runs, and spec/signature status. Git is the transport - no network, no account, works on a bare clone. Nothing in the bridge can edit an approved criterion.",
+  "repository": {
+    "url": "https://github.com/Baktun-Studio/linebreak-gate",
+    "source": "github"
+  },
+  "websiteUrl": "https://www.linebreakapp.com/en/start",
+  "version": "1.10.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "linebreak-gate",
+      "version": "1.10.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}
