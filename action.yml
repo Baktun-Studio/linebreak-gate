@@ -1,0 +1,281 @@
+# LineBreak Security Gate — composite GitHub Action.
+#
+# Lives next to the linebreak-gate Python package it installs. Clients use it
+# via the public mirror (action.yml sits at that repo's root):
+#
+#   uses: Baktun-Studio/linebreak-gate@v1
+#
+# The gate becomes a true merge boundary only when this check is REQUIRED via
+# branch protection — see README.md in this directory.
+
+name: "LineBreak Security Gate"
+description: >-
+  Block merges that carry known vulnerabilities or fail the approved
+  acceptance criteria: osv-scanner dependency scan + AI SAST + criteria
+  enforcement (.linebreak/spec/), human-approved sign-offs and overrides on
+  the record, git-native audit artifacts.
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  fail-on:
+    description: >-
+      Blocking severity floor (critical|high|medium|low). Overrides the repo's
+      .linebreak/gate.yml. Leave empty to use the file / built-in default
+      (critical).
+    required: false
+    default: ""
+  path:
+    description: Project root to scan, relative to the workspace.
+    required: false
+    default: "."
+  license-key:
+    description: >-
+      LineBreak license key (store in secrets). Optional today — the gate runs
+      without one and prints a notice; required once license enforcement is
+      enabled.
+    required: false
+    default: ""
+  anthropic-api-key:
+    description: >-
+      Anthropic API key enabling the AI SAST pass (store in secrets). Leave
+      empty to run the dependency scan only.
+    required: false
+    default: ""
+  github-token:
+    description: Token used to post/update the PR summary comment.
+    required: false
+    default: ${{ github.token }}
+  comment:
+    description: Post (and update in place) a single PR summary comment.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Install linebreak-gate
+      shell: bash
+      run: python -m pip install --quiet "${{ github.action_path }}"
+
+    - name: Install osv-scanner
+      shell: bash
+      # FAIL CLOSED: without osv-scanner the CLI would silently degrade to the
+      # npm-audit fallback (npm-only coverage, different finding identities),
+      # so an install failure fails the check rather than weakening the scan.
+      run: |
+        set -euo pipefail
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64) suffix="linux_amd64" ;;
+          Linux-aarch64) suffix="linux_arm64" ;;
+          Darwin-x86_64) suffix="darwin_amd64" ;;
+          Darwin-arm64) suffix="darwin_arm64" ;;
+          *) echo "::error::unsupported runner platform for osv-scanner"; exit 1 ;;
+        esac
+        mkdir -p "$RUNNER_TEMP/linebreak-gate-bin"
+        bin="$RUNNER_TEMP/linebreak-gate-bin/osv-scanner"
+        # Stable unversioned asset name first; fall back to resolving the asset
+        # list via the API in case upstream renames assets again.
+        if ! curl -fsSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_$suffix" -o "$bin"; then
+          url=$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/google/osv-scanner/releases/latest \
+            | python -c "import json,sys; assets=json.load(sys.stdin).get('assets',[]); print(next((a['browser_download_url'] for a in assets if a['name'].endswith('$suffix')), ''))")
+          if [ -z "$url" ] || ! curl -fsSL "$url" -o "$bin"; then
+            echo "::error::could not install osv-scanner — failing closed (the gate must not silently degrade to npm-audit-only coverage)"
+            exit 1
+          fi
+        fi
+        chmod +x "$bin"
+        echo "LINEBREAK_OSV_SCANNER_BIN=$bin" >> "$GITHUB_ENV"
+
+    - name: Run linebreak-gate scan
+      id: scan
+      shell: bash
+      env:
+        INPUT_LICENSE_KEY: ${{ inputs.license-key }}
+        INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        # Export credentials only when provided so an empty input never
+        # clobbers a workflow-level env var. (Plain `[ -n ] && export` would
+        # abort the step under the runner's `bash -e`.)
+        if [ -n "$INPUT_LICENSE_KEY" ]; then
+          export LINEBREAK_LICENSE_KEY="$INPUT_LICENSE_KEY"
+        fi
+        if [ -n "$INPUT_ANTHROPIC_API_KEY" ]; then
+          export ANTHROPIC_API_KEY="$INPUT_ANTHROPIC_API_KEY"
+        fi
+        args=(scan --path "${{ inputs.path }}")
+        if [ -n "$INPUT_FAIL_ON" ]; then
+          args+=(--fail-on "$INPUT_FAIL_ON")
+        fi
+        mkdir -p "$RUNNER_TEMP/linebreak-gate-out"
+        set +e
+        linebreak-gate "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/linebreak-gate-out/report.txt"
+        code=${PIPESTATUS[0]}
+        set -e
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+        echo "dir=$RUNNER_TEMP/linebreak-gate-out" >> "$GITHUB_OUTPUT"
+        # The check fails at the end (after report/comment/artifact), so the
+        # human-readable evidence is always produced — fail closed either way.
+        exit 0
+
+    - name: Run linebreak-gate check (acceptance criteria)
+      id: check
+      if: always()
+      shell: bash
+      env:
+        INPUT_LICENSE_KEY: ${{ inputs.license-key }}
+      run: |
+        # Criteria enforcement (Piece 3): evaluates the approved spec bundle
+        # (.linebreak/spec/) when one exists. No bundle → clean no-op (exit 0),
+        # so repos using only the security scan are unaffected.
+        if [ -n "$INPUT_LICENSE_KEY" ]; then
+          export LINEBREAK_LICENSE_KEY="$INPUT_LICENSE_KEY"
+        fi
+        mkdir -p "$RUNNER_TEMP/linebreak-gate-out"
+        set +e
+        linebreak-gate check --path "${{ inputs.path }}" 2>&1 \
+          | tee "$RUNNER_TEMP/linebreak-gate-out/criteria.txt"
+        code=${PIPESTATUS[0]}
+        set -e
+        echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+        # Own dir output so the comment reads criteria.txt from HERE, not from
+        # the scan step (which may have been skipped, leaving its dir empty).
+        echo "dir=$RUNNER_TEMP/linebreak-gate-out" >> "$GITHUB_OUTPUT"
+        # Enforcement happens in the final step so the comment/artifact always
+        # carry the evidence — fail closed either way.
+        exit 0
+
+    - name: Collect the JSON report + audit artifacts
+      id: report
+      if: always()
+      shell: bash
+      env:
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/linebreak-gate-out"
+        # Same floor as the enforced scan — the JSON evidence must never be
+        # evaluated at a different threshold than the check verdict.
+        args=(report --path "${{ inputs.path }}" --format json)
+        if [ -n "$INPUT_FAIL_ON" ]; then
+          args+=(--fail-on "$INPUT_FAIL_ON")
+        fi
+        linebreak-gate "${args[@]}" > "$RUNNER_TEMP/linebreak-gate-out/report.json" || true
+        cp "${{ inputs.path }}"/.linebreak/audit/*.json "$RUNNER_TEMP/linebreak-gate-out/" 2>/dev/null || true
+        echo "dir=$RUNNER_TEMP/linebreak-gate-out" >> "$GITHUB_OUTPUT"
+
+    - name: Upload JSON artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: linebreak-gate-report
+        path: ${{ steps.report.outputs.dir }}
+        if-no-files-found: warn
+
+    - name: Post or update the PR summary comment
+      if: always() && inputs.comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ steps.scan.outputs.dir }}/report.txt
+        CRITERIA_PATH: ${{ steps.check.outputs.dir }}/criteria.txt
+        SCAN_EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+        CHECK_EXIT_CODE: ${{ steps.check.outputs.exit_code }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          // A comment failure (e.g. fork PRs, where GITHUB_TOKEN cannot write
+          // comments) must never mask the gate verdict — warn and move on so
+          // the Enforce step still decides the check.
+          try {
+          const fs = require('fs');
+          const marker = '<!-- linebreak-gate-summary -->';
+          const read = (p) => {
+            try { return fs.readFileSync(p, 'utf8'); } catch { return '(no report produced)'; }
+          };
+          const cap = 30000; // two sections must stay under GitHub's comment size limit
+          const clip = (s) =>
+            s.length > cap ? s.slice(0, cap) + '\n… (truncated; full report in the workflow artifact)' : s;
+          const scanCode = process.env.SCAN_EXIT_CODE;
+          const checkCode = process.env.CHECK_EXIT_CODE;
+          const scanStatus =
+            scanCode === '0' ? '✅ **PASS**' :
+            scanCode === '1' ? '⛔ **BLOCKED — known vulnerabilities at/above the configured floor**' :
+            '⚠️ **SCAN ERROR — gate failed closed**';
+          // Exit 0 covers three states — satisfied, no bundle, and
+          // enforcement disabled — so don't render all three as "PASS"
+          // (a disabled/absent gate isn't a verified one). Distinguish from
+          // the evidence text the CLI prints on the non-evaluating paths.
+          const criteriaText = read(process.env.CRITERIA_PATH);
+          const notEnforced =
+            checkCode === '0' &&
+            (/no approved criteria found/i.test(criteriaText) ||
+             /enforcement DISABLED/i.test(criteriaText));
+          const checkStatus =
+            notEnforced ? 'ℹ️ **NOT ENFORCED — no approved spec bundle, or criteria.enforce: false**' :
+            checkCode === '0' ? '✅ **PASS**' :
+            checkCode === '1' ? '⛔ **BLOCKED — acceptance criteria unmet (failing check or missing sign-off)**' :
+            '⚠️ **CHECK ERROR — gate failed closed**';
+          const status = (scanCode === '0' && checkCode === '0')
+            ? (notEnforced
+                ? '✅ **Security clear — acceptance criteria not enforced**'
+                : '✅ **PASS — security and acceptance criteria both clear**')
+            : '⛔ **BLOCKED — see the failing section below**';
+          const body = [
+            marker,
+            '## LineBreak gate',
+            '',
+            status,
+            '',
+            '### Security',
+            '',
+            scanStatus,
+            '',
+            '```text',
+            clip(read(process.env.REPORT_PATH)).trimEnd(),
+            '```',
+            '',
+            '### Acceptance criteria',
+            '',
+            checkStatus,
+            '',
+            '```text',
+            clip(read(process.env.CRITERIA_PATH)).trimEnd(),
+            '```',
+            '',
+            '_Humans stay on the record: security overrides via `linebreak-gate override --finding <id> --reason "…" --approver <…>`; criteria via `--criterion <id>`; `manual` criteria via `linebreak-gate signoff --criterion <id> --approver <…> --note "…"`. Commit the updated `.linebreak/` files._',
+          ].join('\n');
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          const comments = await github.paginate(github.rest.issues.listComments, {
+            owner, repo, issue_number, per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.startsWith(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+          } catch (e) {
+            core.warning(`linebreak-gate: could not post the PR summary comment: ${e.message}`);
+          }
+
+    - name: Enforce gate result
+      shell: bash
+      run: |
+        # Default a missing/empty output to 2, never 0: bash arithmetic treats
+        # an empty var as 0, which would pass the gate for a section whose step
+        # didn't report — fail closed (missing evidence = tool error).
+        scan="${{ steps.scan.outputs.exit_code }}"; scan="${scan:-2}"
+        check="${{ steps.check.outputs.exit_code }}"; check="${check:-2}"
+        echo "linebreak-gate scan exited $scan, check exited $check (0 pass / 1 blocking / 2 tool error)"
+        # The check fails when EITHER detector blocks; the worse code wins so a
+        # tool error (2) is never downgraded to a plain block (1).
+        code=$(( scan > check ? scan : check ))
+        exit "$code"
