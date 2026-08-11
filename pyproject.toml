@@ -1,0 +1,82 @@
+[project]
+name = "linebreak-gate"
+dynamic = ["version"]
+description = "LineBreak security gate at the git/CI boundary: dependency CVE scan + AI SAST, human-approved overrides, git-native audit records"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [{ name = "Baktun Studio" }]
+keywords = ["security", "ci", "cve", "sast", "osv-scanner", "supply-chain"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
+dependencies = [
+    # .linebreak/gate.yml (config-as-code for the gate policy)
+    "pyyaml>=6.0,<7.0",
+    # AI SAST pass (BYOK via ANTHROPIC_API_KEY); the dependency scan works
+    # without any API access.
+    "anthropic>=0.40.0",
+    # Ed25519 verification of signed approvals (LIN-51). OFFLINE only — the
+    # gate never contacts the governance service; it holds public keys and
+    # verifies locally.
+    "cryptography>=42",
+    # MCP bridge (LIN-55): `linebreak-gate mcp` serves the approved spec to the
+    # developer's editor over stdio. Imported LAZILY — only the mcp command
+    # touches it, so embedders importing linebreak_gate never load it.
+    "mcp>=1.0,<2.0",
+]
+
+[project.urls]
+Homepage = "https://linebreakapp.com"
+Source = "https://github.com/Baktun-Studio/linebreak-gate"
+Documentation = "https://github.com/Baktun-Studio/linebreak-gate#readme"
+
+[project.scripts]
+linebreak-gate = "linebreak_gate.cli:main"
+
+[build-system]
+# >=1.26 for PEP 639 license expressions.
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+# Single-source the version: __init__.__version__ is canonical; the publish
+# workflow and PyPI metadata both derive from it (no hand-synced copies).
+[tool.hatch.version]
+path = "src/linebreak_gate/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/linebreak_gate"]
+# Ship the Ed25519 conformance vector (LIN-51) as package data so every
+# consumer — the gate's own suite and the governance service that installs
+# this wheel — verifies against the identical bytes.
+artifacts = ["src/linebreak_gate/golden/*.json"]
+
+# Mirrors apps/desktop/backend's ruff config so `pnpm py:lint` can cover both.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["__pycache__", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B008", "B904"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

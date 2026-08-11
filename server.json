@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.linebreakapp/linebreak-gate",
+  "title": "LineBreak Gate & Spec Bridge",
+  "description": "Approved acceptance criteria served over MCP to Claude Code, Cursor, or Codex. Git-only, sealed.",
+  "repository": {
+    "url": "https://github.com/Baktun-Studio/linebreak-gate",
+    "source": "github"
+  },
+  "websiteUrl": "https://www.linebreakapp.com/en/start",
+  "version": "1.10.3",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "linebreak-gate",
+      "version": "1.10.3",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}
