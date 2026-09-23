@@ -1,0 +1,63 @@
+{
+  "passes": false,
+  "tool_error": false,
+  "block_reasons": [
+    "unsigned_manual"
+  ],
+  "criteria": [
+    {
+      "id": "S1-AC1",
+      "story": "S1",
+      "statement": "S1-AC1 passes",
+      "check": {
+        "type": "command",
+        "payload": "python -c \"import sys; sys.exit(0)\""
+      },
+      "result": "pass",
+      "detail": "exit 0"
+    },
+    {
+      "id": "S1-AC2",
+      "story": "S1",
+      "statement": "S1-AC2 reviewed",
+      "check": {
+        "type": "manual"
+      },
+      "result": "needs-signoff"
+    }
+  ],
+  "scope": {
+    "mode": "started",
+    "stories_evaluated": [
+      "S1"
+    ],
+    "stories_skipped": [
+      "S2",
+      "S3"
+    ],
+    "manual": "block",
+    "stage": "release",
+    "release_only": [],
+    "criteria_evaluated": 2,
+    "criteria_total": 4
+  },
+  "pending_signoffs": [
+    {
+      "id": "S1-AC2",
+      "story": "S1"
+    }
+  ],
+  "expired_overrides": [],
+  "expiring_overrides": [],
+  "governance_signoffs": 0,
+  "bundle": {
+    "generated_at": "2026-07-13T00:00:00Z",
+    "source_phase": "epics_and_stories",
+    "approved_by": "v@example.com",
+    "stories": 3,
+    "signature": "unsigned",
+    "signed_by": null,
+    "signing_kid": null,
+    "self_approved": false
+  }
+}
