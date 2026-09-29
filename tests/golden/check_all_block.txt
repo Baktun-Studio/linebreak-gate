@@ -1,0 +1,11 @@
+LineBreak acceptance criteria — bundle from epics_and_stories (2026-07-13T00:00:00Z), approved by v@example.com, 3 story(ies)
+  bundle is UNSIGNED — no approvals.public_keys configured in .linebreak/gate.yml; criteria are enforced but the approval carries no cryptographic assurance
+  scope: all stories (3), 4 of 4 criteria, manual criteria: block, stage: release
+  [ok] [pass] S1/S1-AC1  (command: python -c "import sys; sys.exit(0)")  S1-AC1 passes
+  [?] [needs-signoff] S1/S1-AC2  (manual)  S1-AC2 reviewed
+  [x] [fail] S2/S2-AC1  (command: python -c "import sys; sys.exit(1)")  S2-AC1 passes
+      exit 1
+  [?] [needs-signoff] S3/S3-AC1  (manual)  S3-AC1 reviewed
+  pending sign-off: S1-AC2 (S1)
+  pending sign-off: S3-AC1 (S3)
+VERDICT: BLOCKED — 1 fail, 2 needs-signoff, 1 pass (reasons: tests_failed, unsigned_manual). Fix the code, record a sign-off for `manual` criteria (linebreak-gate signoff), or record an attributed override (linebreak-gate override --criterion <id> ...).

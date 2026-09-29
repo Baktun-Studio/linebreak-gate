@@ -1,0 +1,7 @@
+# Smithery listing config — https://smithery.ai/docs/build/project-config
+# Local stdio server; users run it via uvx, no preinstall and no config needed.
+startCommand:
+  type: stdio
+  configSchema: {}
+  commandFunction: |-
+    (config) => ({ command: 'uvx', args: ['linebreak-gate', 'mcp'] })

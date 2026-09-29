@@ -1,0 +1,55 @@
+# linebreak-gate CI image: a Bitbucket Pipelines step image and an Azure
+# Pipelines container job image.
+#
+#   docker build -f Dockerfile.ci -t linebreak-gate-ci .
+#   docker run --rm -v "$PWD:/work" -w /work linebreak-gate-ci linebreak-gate ci
+#
+# What both providers require, and this image honors:
+#   * no ENTRYPOINT (the provider starts the container with its own command);
+#   * root user with bash and glibc (Azure's agent bootstraps the container
+#     with useradd/groupadd, Bitbucket runs the step script as root);
+#   * git, curl and ca-certificates for the checkout and for pip.
+# osv-scanner is preinstalled so the dependency scan never degrades and the
+# runner needs no egress to github.com at run time.
+#
+# The sibling Dockerfile (no suffix) is the MCP server image: it defines the
+# entrypoint `linebreak-gate mcp`, runs unprivileged and ships no scanner. It
+# is not usable for CI.
+
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    LINEBREAK_OSV_SCANNER_BIN=/usr/local/bin/osv-scanner
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin with --build-arg OSV_SCANNER_VERSION=v2.x.y for a reproducible image.
+ARG OSV_SCANNER_VERSION=latest
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64) asset=linux_amd64 ;; \
+      aarch64|arm64) asset=linux_arm64 ;; \
+      *) echo "unsupported architecture $(uname -m)"; exit 1 ;; \
+    esac; \
+    if [ "$OSV_SCANNER_VERSION" = "latest" ]; then \
+      url="https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_$asset"; \
+    else \
+      url="https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_$asset"; \
+    fi; \
+    curl -fsSL -o /usr/local/bin/osv-scanner "$url" \
+    && chmod +x /usr/local/bin/osv-scanner \
+    && osv-scanner --version
+
+# Installed from this source tree (the public mirror's root IS packages/gate),
+# so the image never waits for a PyPI release. cryptography <47: the 47+
+# manylinux aarch64 wheels SIGILL under some virtualized arm64 environments.
+COPY . /src
+RUN pip install /src "cryptography<47" && rm -rf /src && linebreak-gate --help >/dev/null
+
+WORKDIR /work
+CMD ["linebreak-gate", "--help"]
